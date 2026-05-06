@@ -12,8 +12,7 @@ Z="${Z:-1000}"
 WARMUP_STEPS="${WARMUP_STEPS:-1}"
 TIMED_STEPS="${TIMED_STEPS:-10}"
 SCAN_CHUNK_STEPS="${SCAN_CHUNK_STEPS:-1}"
-COLLISION_MODE="${COLLISION_MODE:-voxel_vmap}"
-OUT="${OUT:-outputs/google_infra/d3q27_soa_boilerplate_vmap_1024x1024x1000_10step.json}"
+OUT="${OUT:-outputs/google_infra/d3q27_soa_boilerplate_1024x1024x1000_10step.json}"
 
 gcloud alpha compute tpus tpu-vm ssh "${TPU_NAME}" \
   --project "${PROJECT}" \
@@ -28,5 +27,4 @@ gcloud alpha compute tpus tpu-vm ssh "${TPU_NAME}" \
     --warmup-steps ${WARMUP_STEPS} \
     --timed-steps ${TIMED_STEPS} \
     --scan-chunk-steps ${SCAN_CHUNK_STEPS} \
-    --collision-mode ${COLLISION_MODE} \
     --output ${OUT}"

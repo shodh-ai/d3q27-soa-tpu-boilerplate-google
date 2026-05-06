@@ -16,12 +16,11 @@ mkdir -p logs outputs/google_infra
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export XLA_FLAGS="${XLA_FLAGS:-} --xla_gpu_autotune_level=0"
 
-python -u d3q27_soa_boilerplate.py \
+python -u deliverables/google_infra/d3q27_soa_boilerplate.py \
   --global-x "${GLOBAL_X:-512}" \
   --y "${Y:-512}" \
   --z "${Z:-512}" \
   --warmup-steps "${WARMUP_STEPS:-1}" \
   --timed-steps "${TIMED_STEPS:-10}" \
   --scan-chunk-steps "${SCAN_CHUNK_STEPS:-1}" \
-  --collision-mode "${COLLISION_MODE:-voxel_vmap}" \
   --output "${OUT:-outputs/google_infra/d3q27_soa_boilerplate_h100_${SLURM_JOB_ID}.json}"

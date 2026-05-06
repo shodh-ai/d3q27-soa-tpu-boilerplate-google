@@ -27,12 +27,7 @@ with a dummy BGK operator exposing:
 - Resident state is Struct-of-Arrays: 9 arrays shaped `(X,Y,Z,3)`.
 - X-axis sharding uses `PartitionSpec("x", None, None, None)`.
 - Network transfer uses SoA groups for halo exchange.
-- Default local collision uses `--collision-mode voxel_vmap`: macro variables are
-  computed lazily from the 9 groups, then nested `jax.vmap` builds the
-  27-channel vector only inside a one-voxel collision micro-kernel. This is the
-  SRAM-fusion path Google suggested to avoid materializing a full local
-  `(X,Y,Z,27)` tensor in HBM.
-- The old comparator remains available with `--collision-mode local_aos`.
+- Local compute temporarily fuses groups with `jnp.concatenate(..., axis=-1)`.
 - Solid and boundary masks use `jnp.where`.
 - Collision is graph-split with `jax.checkpoint` and explicit `block_until_ready`.
 - The time loop is written as `jax.lax.scan` chunks, controlled by
@@ -62,19 +57,6 @@ TPU_NAME=YOUR_TPU_POD_NAME \
 ./launch_tpu_v6e64_d3q27_soa.sh
 ```
 
-If the pod is already running production training, stage a polite queued launch
-instead of killing anything:
-
-```bash
-PROJECT=stunning-grin-493612-t4 \
-ZONE=asia-south1-b \
-TPU_NAME=shodh-ai-pod \
-./queue_tpu_vmap_benchmark.sh
-```
-
-The queued launcher waits until `train_pido_xla.py` and existing D3Q27
-benchmarks are gone, copies the files, then runs the 1B voxel vmap benchmark.
-
 ## H100 Slurm Setup
 
 ```bash
@@ -85,7 +67,7 @@ sbatch run_h100_d3q27_soa.sbatch
 Override size:
 
 ```bash
-GLOBAL_X=1024 Y=1024 Z=1000 TIMED_STEPS=10 COLLISION_MODE=voxel_vmap sbatch run_h100_d3q27_soa.sbatch
+GLOBAL_X=1024 Y=1024 Z=1000 TIMED_STEPS=10 sbatch run_h100_d3q27_soa.sbatch
 ```
 
 ## Output Metric
