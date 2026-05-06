@@ -26,3 +26,15 @@ Explicit `jax.lax.scan` smoke test, `128 x 128 x 128`, 2 timed steps:
   "passed": true
 }
 ```
+
+## Pending Vmap/SRAM-Fusion Run
+
+Google suggested avoiding the local full-AoS materialization during collision.
+The repo now includes `--collision-mode voxel_vmap`, which computes
+hydrodynamic moments lazily from the 9 SoA groups and uses nested `jax.vmap`
+around a one-voxel Cumulant micro-kernel.
+
+The 1B benchmark has not been relaunched yet because the TPU pod is currently
+occupied by the `train_pido_xla.py` production training job. Use
+`queue_tpu_vmap_benchmark.sh` to wait politely and launch the benchmark when the
+pod is free.

@@ -11,10 +11,12 @@ State layout:
     populations = tuple(9 arrays shaped (X, Y, Z, 3))
 
 The resident distributed state is Struct-of-Arrays (SoA).  Each array is
-sharded over X with ``PartitionSpec("x", None, None, None)``.  The local
-collision kernel temporarily concatenates the 9 groups into a local
-``(local_X, Y, Z, 27)`` tensor, performs D3Q27 collision, then splits back to
-SoA before streaming.  Boundary/solid handling uses ``jnp.where`` masks.
+sharded over X with ``PartitionSpec("x", None, None, None)``.  The default
+collision path keeps the network state as 9 groups and uses nested ``jax.vmap``
+to build the 27-channel vector only at the per-voxel collision boundary, giving
+XLA the opportunity to fuse the local concatenate/collision/split inside TPU
+SRAM tiles instead of materializing a full ``(local_X, Y, Z, 27)`` tensor in
+HBM.  Boundary/solid handling uses ``jnp.where`` masks.
 
 Note for infrastructure review:
 
@@ -113,6 +115,16 @@ def main() -> None:
     parser.add_argument("--outlet-rho", type=float, default=1.0)
     parser.add_argument("--smagorinsky-constant", type=float, default=0.16)
     parser.add_argument(
+        "--collision-mode",
+        choices=("voxel_vmap", "local_aos"),
+        default="voxel_vmap",
+        help=(
+            "voxel_vmap keeps the 27-channel concatenate inside a per-voxel "
+            "vmap collision kernel so XLA can fuse it in SRAM tiles. "
+            "local_aos preserves the older local full-AoS materialization path."
+        ),
+    )
+    parser.add_argument(
         "--scan-chunk-steps",
         type=int,
         default=1,
@@ -136,6 +148,7 @@ def main() -> None:
     mesh = Mesh(np.asarray(devices), ("x",))
     bounds = group_bounds(3)
     velocities = d3q27_velocities()
+    velocities_jnp = jnp.asarray(velocities, dtype=jnp.float32)
     opposites = d3q27_opposites(velocities)
     op = ShiftedD3Q27CumulantOperator(tau=args.tau, rho0=1.0, dtype=jnp.float32)
 
@@ -207,23 +220,74 @@ def main() -> None:
     group_of = {q: gi for gi, (start, stop) in enumerate(bounds) for q in range(start, stop)}
     local_of = {q: q - bounds[group_of[q]][0] for q in range(27)}
 
+    def macro_from_groups(local_groups):
+        """Hydrodynamic moments without materializing the 27-population tensor."""
+        rho_delta = jnp.zeros(local_groups[0].shape[:-1], dtype=local_groups[0].dtype)
+        momentum = jnp.zeros(local_groups[0].shape[:-1] + (3,), dtype=local_groups[0].dtype)
+        for group, (start, stop) in zip(local_groups, bounds):
+            rho_delta = rho_delta + jnp.sum(group, axis=-1)
+            momentum = momentum + jnp.einsum("...q,qd->...d", group, velocities_jnp[start:stop])
+        rho = jnp.asarray(op.rho0, dtype=local_groups[0].dtype) + rho_delta
+        u = momentum / rho[..., None]
+        return rho.astype(jnp.float32), u.astype(jnp.float32)
+
+    def collide_micro_voxel(*items):
+        """One-voxel collision used by nested vmap.
+
+        The only 27-wide tensor here is a single voxel vector.  That is the
+        shape Google asked for: local SoA fields enter separately, the Cumulant
+        math sees a compact vector inside the mapped kernel, and the result is
+        split back before it can become a full local AoS allocation.
+        """
+        group_vecs = items[:9]
+        rho_scalar, u_vec, omega_scalar, solid_scalar = items[9:]
+        f_vec = jnp.concatenate(group_vecs, axis=-1)
+        f = f_vec.reshape((1, 1, 1, 27))
+        rho = rho_scalar.reshape((1, 1, 1))
+        u = u_vec.reshape((1, 1, 1, 3))
+        omega = omega_scalar.reshape((1, 1, 1))
+
+        f_post = op.collide(f, omega_shear=omega)
+        du = jnp.zeros_like(u).at[..., 0].set(args.pressure_gradient)
+        f_forced = f_post + (op.equilibrium_storage(rho, u + du) - op.equilibrium_storage(rho, u))
+        f_forced = jnp.where(solid_scalar, 0.0, f_forced.reshape((27,)))
+        return tuple(f_forced[start:stop].astype(jnp.float32) for start, stop in bounds)
+
+    vmapped_collide_micro = jax.vmap(
+        jax.vmap(
+            jax.vmap(
+                collide_micro_voxel,
+                in_axes=(*([0] * 9), 0, 0, 0, 0),
+                out_axes=0,
+            ),
+            in_axes=(*([0] * 9), 0, 0, 0, 0),
+            out_axes=0,
+        ),
+        in_axes=(*([0] * 9), 0, 0, 0, 0),
+        out_axes=0,
+    )
+
     def collide_local(*local_groups):
         shard_idx = jax.lax.axis_index("x")
         x_offset = shard_idx * local_groups[0].shape[0]
         solid = generic_solid_mask(local_groups[0].shape, x_offset)
 
-        # Network SoA -> local Compute AoS.  This is local to each shard.
-        f = jnp.concatenate(local_groups, axis=-1)
-        rho, u = op.macroscopic(f)
+        rho, u = macro_from_groups(local_groups)
         u = jnp.where(solid[..., None], 0.0, u)
 
         omega, strain_mag = branchless_sgs_omega(u, solid, args.tau, args.smagorinsky_constant)
-        f_post = jax.checkpoint(lambda f_in, omega_in: op.collide(f_in, omega_shear=omega_in), prevent_cse=False)(f, omega)
-
-        du = jnp.zeros_like(u).at[..., 0].set(args.pressure_gradient)
-        f_forced = f_post + (op.equilibrium_storage(rho, u + du) - op.equilibrium_storage(rho, u))
-        f_forced = jnp.where(solid[..., None], 0.0, f_forced)
-        return (*split_groups(f_forced, bounds), jax.lax.pmax(jnp.max(strain_mag), "x"))
+        if args.collision_mode == "local_aos":
+            # Legacy comparator: materialize a local (local_X, Y, Z, 27) tensor.
+            f = jnp.concatenate(local_groups, axis=-1)
+            f_post = jax.checkpoint(lambda f_in, omega_in: op.collide(f_in, omega_shear=omega_in), prevent_cse=False)(
+                f, omega
+            )
+            du = jnp.zeros_like(u).at[..., 0].set(args.pressure_gradient)
+            f_forced = f_post + (op.equilibrium_storage(rho, u + du) - op.equilibrium_storage(rho, u))
+            out_groups = split_groups(jnp.where(solid[..., None], 0.0, f_forced), bounds)
+        else:
+            out_groups = vmapped_collide_micro(*local_groups, rho, u, omega, solid)
+        return (*out_groups, jax.lax.pmax(jnp.max(strain_mag), "x"))
 
     collide = jax.jit(
         shard_map(
