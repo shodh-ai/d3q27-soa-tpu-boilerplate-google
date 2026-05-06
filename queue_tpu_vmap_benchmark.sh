@@ -13,6 +13,7 @@ POLL_SECONDS="${POLL_SECONDS:-300}"
 COLLISION_CORE="${COLLISION_CORE:-/Users/apple/Desktop/jataka/skanda_simulation/shifted_cumulant_lbm.py}"
 
 busy_regex="${BUSY_REGEX:-train_pido_xla.py|d3q27_soa_boilerplate.py}"
+busy_command="ps -eo pid,args | grep -E '${busy_regex}' | grep -v grep >/dev/null"
 
 while true; do
   if gcloud alpha compute tpus tpu-vm ssh "${TPU_NAME}" \
@@ -20,7 +21,7 @@ while true; do
     --zone "${ZONE}" \
     --worker=all \
     --batch-size=16 \
-    --command="pgrep -af '${busy_regex}' >/dev/null"; then
+    --command="${busy_command}"; then
     echo "TPU pod is busy; sleeping ${POLL_SECONDS}s."
     sleep "${POLL_SECONDS}"
   else
