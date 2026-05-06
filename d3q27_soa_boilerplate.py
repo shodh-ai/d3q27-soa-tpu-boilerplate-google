@@ -455,6 +455,7 @@ def main() -> None:
         "timed_seconds": elapsed,
         "step_seconds": elapsed / max(args.timed_steps, 1),
         "glups": cells * args.timed_steps / max(elapsed, 1e-12) / 1e9,
+        "collision_mode": args.collision_mode,
         "max_velocity": float(np.asarray(max_speed).reshape(-1)[0]),
         "rho_min": float(np.asarray(rho_min).reshape(-1)[0]),
         "rho_max": float(np.asarray(rho_max).reshape(-1)[0]),
@@ -467,6 +468,7 @@ def main() -> None:
             "branchless_wall_masking": True,
             "regularized_open_x": True,
             "checkpointed_collision": True,
+            "voxel_vmap_collision": args.collision_mode == "voxel_vmap",
         },
     }
     report["passed"] = bool(report["finite"] and report["max_velocity"] < 0.18 and 0.95 <= report["rho_min"] <= report["rho_max"] <= 1.05)

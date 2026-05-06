@@ -1,0 +1,37 @@
+{
+  "test": "google_infra_d3q27_soa_boilerplate",
+  "layout": "(X,Y,Z,3) x 9 SoA",
+  "devices": 64,
+  "hosts": 16,
+  "global_shape": [
+    1024,
+    1024,
+    1000
+  ],
+  "logical_population_shape": [
+    1024,
+    1024,
+    1000,
+    27
+  ],
+  "local_x_per_device": 16,
+  "warmup_steps": 1,
+  "timed_steps": 10,
+  "timed_seconds": 6.4385487620020285,
+  "step_seconds": 0.6438548762002029,
+  "glups": 1.6285906013297808,
+  "max_velocity": 0.020015714690089226,
+  "rho_min": 0.9869076013565063,
+  "rho_max": 1.0242279767990112,
+  "strain_max": 0.010615440085530281,
+  "finite": true,
+  "features": {
+    "soa_groups": 9,
+    "channels_per_group": 3,
+    "network_soa_compute_aos": true,
+    "branchless_wall_masking": true,
+    "regularized_open_x": true,
+    "checkpointed_collision": true
+  },
+  "passed": true
+}
