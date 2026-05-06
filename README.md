@@ -1,7 +1,6 @@
 # D3Q27 SoA Boilerplate Reproduction Bundle
 
-This bundle is sanitized for infrastructure review. It contains no customer CAD,
-no customer geometry, and no domain-specific proprietary physics wrappers.
+This bundle is sanitized for infrastructure review.
 
 ## Files
 
