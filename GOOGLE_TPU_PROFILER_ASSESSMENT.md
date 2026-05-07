@@ -230,6 +230,7 @@ The bottleneck is compute/memory inside the fused Cumulant transform, not ICI. T
 
 1. Ask Google to inspect `multiply_reduce_fusion.4/.5` lowering in the `.xplane.pb` traces.
 2. Ask whether the D3Q27 `27 x 27` transform can be lowered to a more MXU-friendly tiled matmul pattern.
-3. Investigate whether the copy/slice aggregate is layout-conversion overhead from the SoA-to-compute path.
-4. Add explicit step markers in a follow-up profiling run to improve TensorBoard/XProf summary attribution.
-5. Capture a full multi-host trace only after the process-0 analysis is complete, because all-host tracing is more likely to perturb the benchmark.
+3. Evaluate Pallas co-engineering: if XLA's automatic lowering cannot natively tile this `27 x 27` transform into SRAM without excessive HBM copying, we would like to collaborate with Google's team to write a custom JAX Pallas micro-kernel for this specific `dot_general` block. We know the TPU network path can scale; the goal is to use Pallas to unlock MXU utilization for the Cumulant transform.
+4. Investigate whether the copy/slice aggregate is layout-conversion overhead from the SoA-to-compute path.
+5. Add explicit step markers in a follow-up profiling run to improve TensorBoard/XProf summary attribution.
+6. Capture a full multi-host trace only after the process-0 analysis is complete, because all-host tracing is more likely to perturb the benchmark.
