@@ -2,8 +2,10 @@ __pycache__/
 *.py[cod]
 .DS_Store
 .venv/
+.venv-tb/
 venv/
 logs/
 outputs/
 *.out
 *.err
+results/tensorboard_profile_*/
