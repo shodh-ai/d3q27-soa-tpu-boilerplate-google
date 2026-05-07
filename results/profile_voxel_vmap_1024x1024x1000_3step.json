@@ -1,0 +1,42 @@
+{
+  "test": "google_infra_d3q27_soa_boilerplate",
+  "layout": "(X,Y,Z,3) x 9 SoA",
+  "devices": 64,
+  "hosts": 16,
+  "global_shape": [
+    1024,
+    1024,
+    1000
+  ],
+  "logical_population_shape": [
+    1024,
+    1024,
+    1000,
+    27
+  ],
+  "local_x_per_device": 16,
+  "warmup_steps": 1,
+  "timed_steps": 3,
+  "timed_seconds": 1.9330189960019197,
+  "step_seconds": 0.6443396653339732,
+  "glups": 1.627365280168657,
+  "collision_mode": "voxel_vmap",
+  "profile_dir": "/home/apple/skanda_simulation/profiles/google_infra_p0_1b/profile_voxel_vmap_1024x1024x1000_3step",
+  "profile_name": "profile_voxel_vmap_1024x1024x1000_3step",
+  "profile_processes": "process0",
+  "max_velocity": 0.019992828369140625,
+  "rho_min": 0.9896554946899414,
+  "rho_max": 1.0179983377456665,
+  "strain_max": 0.01061965711414814,
+  "finite": true,
+  "features": {
+    "soa_groups": 9,
+    "channels_per_group": 3,
+    "network_soa_compute_aos": true,
+    "branchless_wall_masking": true,
+    "regularized_open_x": true,
+    "checkpointed_collision": true,
+    "voxel_vmap_collision": true
+  },
+  "passed": true
+}

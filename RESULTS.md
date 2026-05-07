@@ -54,3 +54,58 @@ The 1B benchmark completed successfully on the 64-chip v6e pod:
 Compared with the previous `local_aos`/full-local-27-channel run
 (`1.604200098 GLUPS`), this is a modest but positive improvement of about
 `1.52%`.
+
+## Process-0 JAX Profiler Traces
+
+The `voxel_vmap` path was profiled with `jax.profiler` using process-0 trace
+capture. This keeps the multi-host run stable while still giving Google a real
+XLA timeline for the SoA/vmap kernel on one host.
+
+`512 x 512 x 500`, 3 timed steps:
+
+```json
+{
+  "devices": 64,
+  "hosts": 16,
+  "global_shape": [512, 512, 500],
+  "timed_steps": 3,
+  "step_seconds": 0.07722084233440303,
+  "glups": 1.697365582110537,
+  "collision_mode": "voxel_vmap",
+  "profile_processes": "process0",
+  "max_velocity": 0.019992828369140625,
+  "rho_min": 0.9905827641487122,
+  "rho_max": 1.0179578065872192,
+  "passed": true
+}
+```
+
+`1024 x 1024 x 1000`, 3 timed steps:
+
+```json
+{
+  "devices": 64,
+  "hosts": 16,
+  "global_shape": [1024, 1024, 1000],
+  "timed_steps": 3,
+  "step_seconds": 0.6443396653339732,
+  "glups": 1.627365280168657,
+  "collision_mode": "voxel_vmap",
+  "profile_processes": "process0",
+  "max_velocity": 0.019992828369140625,
+  "rho_min": 0.9896554946899414,
+  "rho_max": 1.0179983377456665,
+  "passed": true
+}
+```
+
+Trace artifacts are checked in under:
+
+- `results/profiles/profile_voxel_vmap_512x512x500_3step/`
+- `results/profiles/profile_voxel_vmap_1024x1024x1000_3step/`
+
+The profiler warning `Can't import tensorflow.python.profiler.trace` appeared
+on the pod, but the `.xplane.pb` and `.trace.json.gz` files were still written.
+The legacy `local_aos` comparator was not used for profiler capture because it
+stalled under the current TPU/XLA lowering even at small grids; the stable path
+for the Google handoff is `--collision-mode voxel_vmap`.
