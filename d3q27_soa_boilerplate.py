@@ -146,6 +146,15 @@ def main() -> None:
         default=None,
         help="Optional profiler label stored in the JSON report.",
     )
+    parser.add_argument(
+        "--profile-processes",
+        choices=("all", "process0"),
+        default="process0",
+        help=(
+            "Trace only JAX process 0 by default to avoid multi-host trace-service "
+            "coordination hangs. Use 'all' when collecting full distributed traces."
+        ),
+    )
     parser.add_argument("--output", type=Path, default=Path("outputs/google_infra/d3q27_soa_boilerplate.json"))
     args = parser.parse_args()
 
@@ -443,12 +452,19 @@ def main() -> None:
         remaining -= chunk
 
     sync("d3q27_soa_boilerplate_timed_start", args.distributed_init)
+    trace_active = False
     if args.profile_dir is not None:
-        profile_dir = str(args.profile_dir)
-        if not profile_dir.startswith("gs://") and jax.process_index() == 0:
-            args.profile_dir.mkdir(parents=True, exist_ok=True)
+        process_idx = jax.process_index()
+        trace_active = args.profile_processes == "all" or process_idx == 0
+        profile_path = args.profile_dir
+        if args.profile_processes == "all":
+            profile_path = args.profile_dir / f"process_{process_idx:03d}"
+        profile_dir = str(profile_path)
+        if not profile_dir.startswith("gs://") and trace_active:
+            profile_path.mkdir(parents=True, exist_ok=True)
         sync("d3q27_soa_boilerplate_profile_dir_ready", args.distributed_init)
-        jax.profiler.start_trace(profile_dir)
+        if trace_active:
+            jax.profiler.start_trace(profile_dir)
 
     t0 = time.perf_counter()
     remaining = args.timed_steps
@@ -459,7 +475,7 @@ def main() -> None:
     jax.tree_util.tree_map(lambda x: x.block_until_ready(), groups)
     elapsed = time.perf_counter() - t0
 
-    if args.profile_dir is not None:
+    if trace_active:
         jax.profiler.stop_trace()
     sync("d3q27_soa_boilerplate_timed_done", args.distributed_init)
 
@@ -481,6 +497,7 @@ def main() -> None:
         "collision_mode": args.collision_mode,
         "profile_dir": str(args.profile_dir) if args.profile_dir is not None else None,
         "profile_name": args.profile_name,
+        "profile_processes": args.profile_processes,
         "max_velocity": float(np.asarray(max_speed).reshape(-1)[0]),
         "rho_min": float(np.asarray(rho_min).reshape(-1)[0]),
         "rho_max": float(np.asarray(rho_max).reshape(-1)[0]),

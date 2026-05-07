@@ -13,6 +13,7 @@ WARMUP_STEPS="${WARMUP_STEPS:-1}"
 TIMED_STEPS="${TIMED_STEPS:-3}"
 SCAN_CHUNK_STEPS="${SCAN_CHUNK_STEPS:-1}"
 PROFILE_ROOT="${PROFILE_ROOT:-/home/apple/skanda_simulation/profiles/google_infra}"
+PROFILE_PROCESSES="${PROFILE_PROCESSES:-process0}"
 OUT_ROOT="${OUT_ROOT:-outputs/google_infra}"
 
 run_one() {
@@ -34,6 +35,7 @@ run_one() {
       --collision-mode ${mode} \
       --profile-dir ${PROFILE_ROOT}/${name} \
       --profile-name ${name} \
+      --profile-processes ${PROFILE_PROCESSES} \
       --output ${OUT_ROOT}/${name}.json > logs/${name}_\$(hostname).log 2>&1"
 }
 
